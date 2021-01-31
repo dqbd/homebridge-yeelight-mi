@@ -3,6 +3,7 @@
 import * as net from "net"
 import EventEmitter from "events"
 import TypedEmitter from "typed-emitter"
+import { Logger } from "homebridge"
 
 enum DeviceState {
   CONNECTED,
@@ -39,7 +40,7 @@ interface YeelightCommandList {
   set_rgb: [number, "sudden" | "smooth", number]
   set_hsv: [number, number, "sudden" | "smooth", number]
   set_bright: [number, "sudden" | "smooth", number]
-  set_power: ["off"] | ["on"]
+  set_power: ["off"] | ["on"] | ["on", "sudden" | "smooth", number, number]
   toggle: []
   set_default: []
   set_adjust: ["increase" | "decrease" | "circle", "bright" | "ct" | "color"]
@@ -65,10 +66,8 @@ class Counter {
   }
 }
 
-class Device extends (EventEmitter as new () => TypedEmitter<DeviceEvents>) {
+export class Device extends (EventEmitter as new () => TypedEmitter<DeviceEvents>) {
   socket?: net.Socket
-  host?: string
-  port?: number
 
   state?: DeviceState = DeviceState.DISCONNECTED
 
@@ -77,28 +76,33 @@ class Device extends (EventEmitter as new () => TypedEmitter<DeviceEvents>) {
 
   counter = new Counter()
 
-  constructor(host: string, port: number) {
+  constructor(
+    public readonly log: Logger,
+    public readonly host: string,
+    public readonly port: number
+  ) {
     super()
 
-    this.host = host
-    this.port = port
+    this.log.debug(`Device scoket created @ ${host}:${port}`)
   }
 
   private createSocket() {
     this.socket = new net.Socket()
     this.socket.on("data", (data) => {
       try {
+        // TODO: handle parsing of multiple payloads values
         const response = JSON.parse(data.toString("utf-8"))
         if (response?.method === "props") {
           this.emit("notification", response?.params)
         }
       } catch (error) {
-        console.log("Error whiile parsing notification", error)
+        this.log.error("Error whiile parsing notification", error)
       }
     })
   }
 
   async connect() {
+    this.log.debug(`Connecting to device @ ${this.host}:${this.port}`)
     if (!this.socket || this.socket.destroyed) {
       this.createSocket()
     }
@@ -135,14 +139,16 @@ class Device extends (EventEmitter as new () => TypedEmitter<DeviceEvents>) {
   async command<TKey extends keyof YeelightCommandList>(
     method: TKey,
     parameters: YeelightCommandList[TKey]
-  ) {
+  ): Promise<string[]> {
+
+    this.log.debug("Executing command", method, `on device ${this.host}:${this.port}`)
     if (!this.socket || this.state === DeviceState.DISCONNECTED) {
       throw new Error("Socket is not connected")
     }
 
     const id = this.counter.value
 
-    const response = new Promise((resolve, reject) => {
+    const response = new Promise<string[]>((resolve, reject) => {
       const listener = (data: Buffer) => {
         try {
           const payload = JSON.parse(data.toString("utf-8"))
@@ -158,6 +164,7 @@ class Device extends (EventEmitter as new () => TypedEmitter<DeviceEvents>) {
 
           this.socket?.once("data", listener)
         } catch (error) {
+          this.log.error(error, data.toString("utf-8"))
           return reject(error)
         }
       }
@@ -171,39 +178,3 @@ class Device extends (EventEmitter as new () => TypedEmitter<DeviceEvents>) {
     return response
   }
 }
-
-;(async () => {
-  const device = new Device("172.16.1.203", 55443)
-
-  try {
-    await device.connect()
-
-    console.log(await device.command(42, "set_power", ["off"]))
-
-    // console.log(await device.command(42, "set_power", ["on"]))
-
-    // console.log(
-    //   await device.command(42, "get_prop", [
-    //     "ct",
-    //     "rgb",
-    //     "hue",
-    //     "sat",
-    //     "color_mode",
-    //     "flowing",
-    //     "delayoff",
-    //     "name",
-    //     "active_mode",
-    //     "bright",
-    //   ])
-    // )
-
-    // // range [2700, 5700]
-    // console.log(await device.command(35, "set_ct_abx", [2700, "smooth", 500]))
-
-    // await device.disconnect()
-  } catch (error) {
-    console.log("Error:", error)
-  } finally {
-    // await device.disconnect()
-  }
-})()

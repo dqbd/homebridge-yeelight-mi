@@ -20,7 +20,7 @@
   "scripts": {
     "lint": "eslint src/**.ts --max-warnings=0",
     "watch": "npm run build && npm link && nodemon",
-    "build": "rimraf ./dist && babel src --out-dir dist --extensions \".ts\"",
+    "build": "rimraf ./dist && tsc",
     "prepublishOnly": "npm run lint && npm run build"
   },
   "keywords": [
@@ -40,6 +40,7 @@
     "babel-plugin-module-resolver": "^4.0.0",
     "eslint": "^7.18.0",
     "homebridge": "^1.2.5",
+    "homebridge-config-ui-x": "^4.37.0",
     "nodemon": "^2.0.7",
     "rimraf": "^3.0.2",
     "ts-node": "^9.1.1",
