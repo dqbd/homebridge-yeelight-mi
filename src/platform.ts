@@ -12,17 +12,11 @@ import { PLATFORM_NAME, PLUGIN_NAME } from "./settings"
 import { YeelightMiPlatformAccessory } from "./platformAccessory"
 import { Discover, DiscoverDevice } from "./yeelight/discover"
 
-/**
- * HomebridgePlatform
- * This class is the main constructor for your plugin, this is where you should
- * parse the user config and discover/register accessories with Homebridge.
- */
 export class YeelightMiHomebridgePlatform implements DynamicPlatformPlugin {
   public readonly Service: typeof Service = this.api.hap.Service
   public readonly Characteristic: typeof Characteristic = this.api.hap
     .Characteristic
 
-  // this is used to track restored cached accessories
   public readonly accessories: {
     [key: string]: {
       instance: PlatformAccessory<DiscoverDevice>
@@ -53,7 +47,7 @@ export class YeelightMiHomebridgePlatform implements DynamicPlatformPlugin {
   registerAccessories() {
     this.log.debug("Registering accessories")
 
-    const discover = new Discover()
+    const discover = new Discover(this.log)
     discover.listen()
 
     // figure out the device's address and port

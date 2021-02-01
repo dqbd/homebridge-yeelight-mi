@@ -10,7 +10,7 @@ enum DeviceState {
   DISCONNECTED,
 }
 
-interface YeelightCommandList {
+export interface YeelightCommandList {
   get_prop: (
     | "power"
     | "bright"
@@ -90,10 +90,10 @@ export class Device extends (EventEmitter as new () => TypedEmitter<DeviceEvents
     this.socket = new net.Socket()
     this.socket.on("data", (data) => {
       try {
-        // TODO: handle parsing of multiple payloads values
-        const response = JSON.parse(data.toString("utf-8"))
-        if (response?.method === "props") {
-          this.emit("notification", response?.params)
+        const items = this.parseResponse(data)
+        for (const response of items) {
+          if (response?.method === "props")
+            this.emit("notification", response?.params)
         }
       } catch (error) {
         this.log.error("Error whiile parsing notification", error)
@@ -103,18 +103,13 @@ export class Device extends (EventEmitter as new () => TypedEmitter<DeviceEvents
 
   async connect() {
     this.log.debug(`Connecting to device @ ${this.host}:${this.port}`)
-    if (!this.socket || this.socket.destroyed) {
-      this.createSocket()
-    }
+    if (!this.socket || this.socket.destroyed) this.createSocket()
 
-    if (this.state === DeviceState.CONNECTED) {
-      return
-    }
+    if (this.state === DeviceState.CONNECTED) return
 
     return new Promise<void>((resolve, reject) => {
-      if (!this.host || !this.port) {
+      if (!this.host || !this.port)
         return reject(new Error("Missing host or port"))
-      }
 
       this.socket?.once("error", (error) => {
         this.state = DeviceState.DISCONNECTED
@@ -129,9 +124,7 @@ export class Device extends (EventEmitter as new () => TypedEmitter<DeviceEvents
   }
 
   async disconnect() {
-    if (this.socket && !this.socket?.destroyed) {
-      this.socket?.destroy()
-    }
+    if (this.socket && !this.socket?.destroyed) this.socket?.destroy()
 
     this.state = DeviceState.DISCONNECTED
   }
@@ -140,29 +133,32 @@ export class Device extends (EventEmitter as new () => TypedEmitter<DeviceEvents
     method: TKey,
     parameters: YeelightCommandList[TKey]
   ): Promise<string[]> {
-
-    this.log.debug("Executing command", method, `on device ${this.host}:${this.port}`)
-    if (!this.socket || this.state === DeviceState.DISCONNECTED) {
+    this.log.debug(
+      "Executing command",
+      method,
+      `on device ${this.host}:${this.port}`
+    )
+    if (!this.socket || this.state === DeviceState.DISCONNECTED)
       throw new Error("Socket is not connected")
-    }
 
     const id = this.counter.value
 
     const response = new Promise<string[]>((resolve, reject) => {
       const listener = (data: Buffer) => {
         try {
-          const payload = JSON.parse(data.toString("utf-8"))
+          const items = this.parseResponse(data)
 
-          if (payload?.id === id) {
-            if (payload?.result && !payload?.error) {
-              return resolve(payload?.result)
+          for (const payload of items) {
+            if (payload?.id === id) {
+              if (payload?.result && !payload?.error)
+                return resolve(payload?.result)
+
+              // TODO: handle network change
+              return reject(payload?.error ?? "Missing error message")
             }
 
-            // TODO: handle network change
-            return reject(payload?.error ?? "Missing error message")
+            this.socket?.once("data", listener)
           }
-
-          this.socket?.once("data", listener)
         } catch (error) {
           this.log.error(error, data.toString("utf-8"))
           return reject(error)
@@ -176,5 +172,18 @@ export class Device extends (EventEmitter as new () => TypedEmitter<DeviceEvents
       JSON.stringify({ id, method, params: parameters }) + "\r\n"
     )
     return response
+  }
+
+  private parseResponse(buffer: Buffer) {
+    const str = buffer
+      .toString("utf-8")
+      .split("\n")
+      .map((i) => i.trim())
+      .filter((i) => Boolean(i))
+
+    const res: ReturnType<typeof JSON.parse>[] = []
+    for (const item of str) res.push(JSON.parse(item))
+
+    return res
   }
 }

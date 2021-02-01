@@ -150,7 +150,7 @@ sudo npm install -g homebridge-example-plugin@beta
 
 ## TODO list
 
-- [ ] Fix JSON parsing error when obtaining notification / response
+- [x] Fix JSON parsing error when obtaining notification / response
 - [ ] Reduce number of TCP/IP requests by bulking get queries
 - [ ] Reduce number of TCP/IP requests by bulking hue/saturation combo
 - [ ] Handle connection failure detection (updateCharacteristic Error)

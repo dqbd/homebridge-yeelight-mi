@@ -17,7 +17,7 @@
     "comma-dangle": ["off"],
     "dot-notation": "off",
     "eqeqeq": "warn",
-    "curly": ["warn", "all"],
+    "curly": ["warn", "multi-or-nest"],
     "brace-style": ["warn"],
     "prefer-arrow-callback": ["warn"],
     "max-len": ["warn", 140],
